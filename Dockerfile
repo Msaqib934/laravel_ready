@@ -30,3 +30,9 @@ RUN composer install
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Expose port 80 (default for HTTP)
+EXPOSE 80
+
+# Specify the default command to run on container startup
+CMD ["apache2-foreground"]
