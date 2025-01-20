@@ -1,43 +1,27 @@
-# This is a basic workflow to help you get started with Actions
-
 name: CI
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
   push:
-    branches: [ master ]
+    branches: [ development ]
   pull_request:
-    branches: [ master ]
-
-  # Allows you to run this workflow manually from the Actions tab
+    branches: [ development ]
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  build-and-push:
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
+    strategy:
+      matrix:
+        app: [admin-ui, admin-api, user-ui, user-api] # List of subdirectories and repositories
+
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - name: Checkout Repository
+        uses: actions/checkout@v2
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
-          
       - name: Directory Permissions
-        run: chmod -R 777 ./    
-          
+        run: chmod -R 755 ./
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -49,41 +33,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Build, tag, and push image to Amazon ECR
-        id: build-image
+      - name: Build and Push to ECR
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: reponame
-          IMAGE_TAG: latest
+          ECR_REGISTRY: 824813378441.dkr.ecr.us-east-1.amazonaws.com
+          IMAGE_TAG: ${{ github.run_number }}
         run: |
-          docker build -t $ECR_REGISTRY/laravel-nginx:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/laravel-nginx:$IMAGE_TAG
-          echo "setting output values"
-          echo "::set-output name=webimage::$ECR_REGISTRY/laravel-nginx:$IMAGE_TAG"
-
-      # Runs a single command using the runners shell
-      - name: Print the image name
-        run: |
-          echo the images are
-          echo ${{ steps.build-image.outputs.webimage }}
-
-      - name: Download task definition
-        run: |
-          aws ecs describe-task-definition --task-definition ${{ secrets.ECS_CONTAINER_DEFINITION }} \
-          --query taskDefinition > task-definition.json
-
-      - name: Fill in the new nginx image ID in the Amazon ECS task definition
-        id: web-task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: ${{ secrets.ECS_NGINX_CONTAINER_NAME }}
-          image: ${{ steps.build-image.outputs.webimage }} 
-
-      - name: Deploy Amazon ECS task definition
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.web-task-def.outputs.task-definition }}
-          service: final
-          cluster: saqib-cluster
-          wait-for-service-stability: true
+          cd ${{ matrix.app }}
+          docker build -t $ECR_REGISTRY/${{ matrix.app }}:${{ github.run_number }} .
+          docker push $ECR_REGISTRY/${{ matrix.app }}:${{ github.run_number }}
